@@ -1,0 +1,218 @@
+--[[ 🌑 SHADOW HUB - ULTRA FAST & LAG-FREE ]]--
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+
+-- Safe Remote Finder
+local function findConsumeRemote()
+	local systems = ReplicatedStorage:FindFirstChild("Systems")
+	if not systems then return nil end
+	local actionsSystem = systems:FindFirstChild("ActionsSystem")
+	if not actionsSystem then return nil end
+	local network = actionsSystem:FindFirstChild("Network")
+	if not network then return nil end
+	return network:FindFirstChild("Consume")
+end
+
+local Consume = findConsumeRemote()
+if not Consume then
+	Consume = ReplicatedStorage:FindFirstChild("Consume", true)
+end
+
+local CONFIG = {
+	EatsPerBatch = 5,      -- 렉 방지를 위한 안전한 배치 설정
+	HealThreshold = 95,
+	InstaHeal = true,
+}
+
+local SLOTS = {}
+for i = 1, 36 do table.insert(SLOTS, i) end
+
+local state = {
+	enabled = false,
+	totalEaten = 0,
+	eatSpeed = 0,
+	speedCounter = 0,
+	slotIndex = 1,
+	lastHealth = 100,
+}
+
+pcall(function()
+	getgenv().ShadowHubState = state
+end)
+
+-- UI Setup (Shadow Hub 테마)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ShadowHubUI"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then
+	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 130, 0, 130)
+ToggleButton.Position = UDim2.new(0.65, -65, 0.85, -65)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(20, 20, 25) -- 어두운 섀도우 톤
+ToggleButton.Text = "OFF"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 22
+ToggleButton.Parent = ScreenGui
+ToggleButton.Draggable = true
+ToggleButton.Active = true
+
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 18)
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Thickness = 3
+UIStroke.Color = Color3.fromRGB(138, 43, 226) -- 신비로운 보라색 (Shadow 테마)
+UIStroke.Transparency = 0.2
+UIStroke.Parent = ToggleButton
+
+local StatusIndicator = Instance.new("Frame")
+StatusIndicator.Size = UDim2.new(0.15, 0, 0.15, 0)
+StatusIndicator.Position = UDim2.new(0.75, 0, 0.1, 0)
+StatusIndicator.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+StatusIndicator.BorderSizePixel = 0
+StatusIndicator.Parent = ToggleButton
+Instance.new("UICorner", StatusIndicator).CornerRadius = UDim.new(1, 0)
+
+local HealthLabel = Instance.new("TextLabel")
+HealthLabel.Size = UDim2.new(1, 0, 0.2, 0)
+HealthLabel.Position = UDim2.new(0, 0, 0.25, 0)
+HealthLabel.BackgroundTransparency = 1
+HealthLabel.Text = "❤️ 100"
+HealthLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+HealthLabel.Font = Enum.Font.GothamBold
+HealthLabel.Parent = ToggleButton
+HealthLabel.TextScaled = true
+
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(1, 0, 0.15, 0)
+SpeedLabel.Position = UDim2.new(0, 0, 0.82, 0)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "⚡0/s"
+SpeedLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+SpeedLabel.Font = Enum.Font.GothamBold
+SpeedLabel.Parent = ToggleButton
+SpeedLabel.TextScaled = true
+
+local ModeLabel = Instance.new("TextLabel")
+ModeLabel.Size = UDim2.new(1, 0, 0.12, 0)
+ModeLabel.Position = UDim2.new(0, 0, 0.72, 0)
+ModeLabel.BackgroundTransparency = 1
+ModeLabel.Text = "🌑 SHADOW HUB"
+ModeLabel.TextColor3 = Color3.fromRGB(186, 85, 211)
+ModeLabel.Font = Enum.Font.GothamBold
+ModeLabel.Parent = ToggleButton
+ModeLabel.TextScaled = true
+
+local function resetEat()
+	state.slotIndex = 1
+	StatusIndicator.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+end
+
+local function setupHealthMonitor(char)
+	local hum = char:FindFirstChild("Humanoid")
+	if hum then
+		state.lastHealth = hum.Health
+		HealthLabel.Text = "❤️ " .. math.floor(hum.Health)
+		hum.HealthChanged:Connect(function(newHealth)
+			HealthLabel.Text = "❤️ " .. math.floor(newHealth)
+			if newHealth < state.lastHealth and CONFIG.InstaHeal and Consume then
+				task.spawn(function()
+					pcall(function()
+						for i = 1, 3 do
+							Consume:InvokeServer(i)
+						end
+					end)
+				end)
+			end
+			state.lastHealth = newHealth
+		end)
+	end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	task.wait(0.5)
+	setupHealthMonitor(char)
+end)
+
+if LocalPlayer.Character then
+	setupHealthMonitor(LocalPlayer.Character)
+end
+
+-- Speed Counter Updater
+task.spawn(function()
+	while true do
+		task.wait(1)
+		if state.enabled then
+			state.eatSpeed = state.speedCounter
+			SpeedLabel.Text = "⚡" .. state.eatSpeed .. "/s"
+			state.speedCounter = 0
+		end
+	end
+end)
+
+-- 렉 및 위치 어긋남 없는 비동기 루프
+local function startEatingLoop()
+	task.spawn(function()
+		while state.enabled do
+			local char = LocalPlayer.Character
+			local hum = char and char:FindFirstChild("Humanoid")
+			if not hum or hum.Health <= 0 then
+				resetEat()
+				task.wait(0.5)
+			else
+				for i = 1, CONFIG.EatsPerBatch do
+					if not state.enabled then break end
+					local slot = SLOTS[state.slotIndex]
+					pcall(function()
+						Consume:InvokeServer(slot)
+						state.totalEaten = state.totalEaten + 1
+						state.speedCounter = state.speedCounter + 1
+					end)
+					state.slotIndex = state.slotIndex + 1
+					if state.slotIndex > #SLOTS then
+						state.slotIndex = 1
+					end
+				end
+				RunService.Heartbeat:Wait()
+			end
+		end
+	end)
+end
+
+local function toggleImmortal()
+	state.enabled = not state.enabled
+	if state.enabled then
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(30, 10, 40)
+		ToggleButton.Text = "ON"
+		UIStroke.Color = Color3.fromRGB(0, 255, 0)
+		StatusIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+		startEatingLoop()
+		print("🌑 SHADOW HUB: ON (Ultra Fast & Lag-Free)")
+	else
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+		ToggleButton.Text = "OFF"
+		UIStroke.Color = Color3.fromRGB(138, 43, 226)
+		StatusIndicator.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+		SpeedLabel.Text = "⚡0/s"
+		print("🌑 SHADOW HUB: OFF")
+	end
+end
+
+ToggleButton.MouseButton1Click:Connect(toggleImmortal)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.K then
+		toggleImmortal()
+	end
+end)
+
+print("🌑 SHADOW HUB LOADED SUCCESSFULLY!")
